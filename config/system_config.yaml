@@ -1,0 +1,7 @@
+memory:
+  index_path: data/memory/crop_memory.index
+  embedding_model: all-MiniLM-L6-v2
+  embedding_dim: 384
+  similarity_metric: cosine
+  index_type: flat   # flat | hnsw
+  top_k: 3
