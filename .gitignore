@@ -1,0 +1,27 @@
+# Model weights
+models/
+
+# Datasets
+data/
+
+# Runtime logs
+logs/
+
+# Environment variables
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# macOS
+.DS_Store
