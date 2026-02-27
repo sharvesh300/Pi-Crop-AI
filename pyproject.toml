@@ -8,3 +8,9 @@ dependencies = [
     "faiss-cpu>=1.13.2",
     "sentence-transformers>=5.2.3",
 ]
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.5.1",
+    "ruff>=0.15.4",
+]
