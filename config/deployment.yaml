@@ -1,0 +1,7 @@
+deployment:
+  environment: edge
+  optimize_for: raspberry_pi
+  use_gpu: false
+  enable_quantization: true
+  benchmark_on_startup: false
+  auto_restart: true

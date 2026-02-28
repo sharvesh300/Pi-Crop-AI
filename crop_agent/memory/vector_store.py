@@ -1,8 +1,9 @@
 import faiss
 import numpy as np
-import yaml
 from pathlib import Path
 from sentence_transformers import SentenceTransformer
+
+from crop_agent.utils import load_yaml
 
 
 class VectorStore:
@@ -24,8 +25,7 @@ class VectorStore:
             store = VectorStore("config/system_config.yaml")
         """
         # Load config
-        with open(config_path, "r") as f:
-            config = yaml.safe_load(f)
+        config = load_yaml(config_path)
 
         memory_cfg = config["memory"]
 

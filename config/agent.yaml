@@ -1,0 +1,25 @@
+agent:
+  allowed_actions:
+    - NO_TREATMENT
+    - MONITOR_24H
+    - MONITOR_48H
+    - FERTILIZER
+    - MEDICINAL_TREATMENT
+
+  severity_rules:
+    low:
+      allow_medicine: false
+      allow_monitoring: true
+
+    medium:
+      allow_medicine: true
+      allow_monitoring: true
+
+    high:
+      allow_medicine: true
+      allow_monitoring: false
+
+  safety:
+    require_human_confirmation: true
+    enforce_crop_constraints: true
+    block_unknown_actions: true

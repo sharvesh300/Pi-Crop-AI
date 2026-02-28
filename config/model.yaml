@@ -1,0 +1,15 @@
+cnn:
+  model_path: models/cnn/mobilenet_v3.tflite
+  input_size: 160
+  num_classes: 5
+  confidence_threshold: 0.75
+  quantized: true
+
+llm:
+  backend: ollama        # ollama | llama_cpp
+  model_name: gemma3n
+  model_path: models/llm/gemma.gguf
+  temperature: 0.2
+  top_p: 0.9
+  max_tokens: 256
+  enforce_json: true

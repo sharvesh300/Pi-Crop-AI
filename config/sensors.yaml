@@ -1,0 +1,14 @@
+sensors:
+  temperature:
+    enabled: true
+    type: DHT22
+    pin: 4
+
+  humidity:
+    enabled: true
+    type: DHT22
+
+  camera:
+    enabled: true
+    resolution: 640x480
+    capture_interval_seconds: 10

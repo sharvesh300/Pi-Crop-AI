@@ -1,3 +1,9 @@
+system:
+  mode: offline_first
+  device: raspberry_pi_5
+  log_level: INFO
+
+
 memory:
   index_path: data/memory/crop_memory.index
   embedding_model: all-MiniLM-L6-v2

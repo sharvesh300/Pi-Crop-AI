@@ -1,0 +1,6 @@
+database:
+  type: sqlite
+  path: data/memory/cases.db
+  auto_commit: true
+  max_records: 10000
+  prune_old_records: false
