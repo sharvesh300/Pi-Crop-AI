@@ -7,9 +7,8 @@ cnn:
 
 llm:
   backend: ollama        # ollama | llama_cpp
-  model_name: gemma3n
-  model_path: models/llm/gemma.gguf
-  temperature: 0.2
+  model_name: qwen2.5:1.5b
+  temperature: 0.7
   top_p: 0.9
   max_tokens: 256
   enforce_json: true
