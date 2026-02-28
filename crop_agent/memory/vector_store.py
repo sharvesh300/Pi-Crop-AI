@@ -1,9 +1,8 @@
 import faiss
-import numpy as np
 from pathlib import Path
-from sentence_transformers import SentenceTransformer
 
 from crop_agent.utils import load_yaml
+from crop_agent.memory.embedder import Embedder
 
 
 class VectorStore:
@@ -35,7 +34,7 @@ class VectorStore:
         self.top_k = memory_cfg["top_k"]
 
         # Load embedding model
-        self.embed_model = SentenceTransformer(memory_cfg["embedding_model"])
+        self.embedder = Embedder(memory_cfg["embedding_model"])
 
         # Initialize index
         self.index = self._initialize_index()
@@ -60,19 +59,6 @@ class VectorStore:
         else:
             raise ValueError("Unsupported index type")
 
-    def _embed(self, text: str):
-        """
-        Encode a string into a normalised float32 embedding vector.
-
-        Usage:
-            # Called internally by add() and search(); no direct usage needed.
-            vector = store._embed("Tomato Leaf Blight")
-        """
-        embedding = self.embed_model.encode([text])
-        embedding = np.array(embedding).astype("float32")
-        faiss.normalize_L2(embedding)  # for cosine similarity
-        return embedding
-
     def add(self, text: str):
         """
         Embed a text string and add it to the FAISS index.
@@ -80,8 +66,7 @@ class VectorStore:
         Usage:
             store.add("Tomato Leaf Blight Medium High humidity Fungicide Improved")
         """
-        embedding = self._embed(text)
-        self.index.add(embedding)
+        self.index.add(self.embedder.embed(text))
 
     def search(self, query: str):
         """
@@ -92,7 +77,7 @@ class VectorStore:
             for i, idx in enumerate(indices):
                 print(idx, scores[i])
         """
-        query_embedding = self._embed(query)
+        query_embedding = self.embedder.embed(query)
         distances, indices = self.index.search(query_embedding, self.top_k)
         return indices[0], distances[0]
 

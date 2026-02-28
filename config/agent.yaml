@@ -23,3 +23,15 @@ agent:
     require_human_confirmation: true
     enforce_crop_constraints: true
     block_unknown_actions: true
+
+planner:
+  allowed_plan_actions:
+    - APPLY_FUNGICIDE
+    - APPLY_FERTILIZER
+    - INCREASE_IRRIGATION
+    - REDUCE_IRRIGATION
+    - PRUNE_AFFECTED_AREA
+    - MONITOR_DAILY
+    - MONITOR_WEEKLY
+    - NOTIFY_AGRONOMIST
+    - NO_ACTION
