@@ -1,39 +1,44 @@
-import subprocess
 from typing import List, Dict
 
-from crop_agent.utils import load_yaml, MODEL_CONFIG, AGENT_CONFIG
-from crop_agent.llm.prompt_loader import build_prompt
-from crop_agent.llm.response_parser import parse_response
+from crop_agent.utils import Utils, load_yaml, MODEL_CONFIG, AGENT_CONFIG
+from crop_agent.llm.model_backends import get_backend
+from crop_agent.llm.prompt_runner import PromptRunner
+from crop_agent.llm.prompt_loader import build_plan_prompt, build_prompt
 
 
 class LLMEngine:
     """
-    Lightweight Agentic LLM Engine for treatment decision support.
+    Lightweight agentic LLM engine for crop treatment decision support.
 
-    Responsibilities:
-    - Load LLM config
-    - Enforce bounded action space
-    - Build structured prompt
-    - Call local LLM (Ollama)
-    - Parse and validate JSON output
+    Delegates backend execution to ModelBackend and prompt execution to
+    PromptRunner, keeping decision/plan logic cleanly separated.
+
+    Usage:
+        engine = LLMEngine()
+        decision = engine.generate_decision(case_context, similar_cases)
+        plan = engine.generate_plan(case_context, decision, plan_actions)
     """
 
     def __init__(self):
+        """
+        Load model and agent configuration, then wire up the backend and runner.
+
+        Usage:
+            engine = LLMEngine()
+        """
         self.model_config = load_yaml(MODEL_CONFIG)
         self.agent_config = load_yaml(AGENT_CONFIG)
 
         self.llm_cfg = self.model_config["llm"]
         self.allowed_actions = self.agent_config["agent"]["allowed_actions"]
 
-        self.backend = self.llm_cfg["backend"]
-        self.model_name = self.llm_cfg["model_name"]
-        self.temperature = self.llm_cfg["temperature"]
-        self.max_tokens = self.llm_cfg["max_tokens"]
         self.enforce_json = self.llm_cfg.get("enforce_json", True)
 
-    # ============================================================
-    # PUBLIC API
-    # ============================================================
+        backend = get_backend(
+            self.llm_cfg["backend"],
+            self.llm_cfg["model_name"],
+        )
+        self.runner = PromptRunner(backend)
 
     def generate_decision(
         self,
@@ -41,45 +46,52 @@ class LLMEngine:
         similar_cases: List[str],
     ) -> Dict:
         """
-        Main entry point for decision generation.
+        Generate a treatment decision for the given crop case.
+
+        Builds a structured prompt via PromptRunner, then parses and validates
+        the JSON response with Utils. Falls back to NO_TREATMENT on failure.
+
+        Args:
+            case_context: Dict with crop, disease, severity, confidence, and
+                          optional temperature/humidity fields.
+            similar_cases: List of historical case strings retrieved from memory.
+
+        Returns:
+            A dict with 'decision' and 'reason' fields.
+
+        Usage:
+            decision = engine.generate_decision(case_context, similar_cases)
         """
-
-        prompt = build_prompt(case_context, similar_cases, self.allowed_actions)
-
-        raw_response = self._infer(prompt)
-
-        if self.enforce_json:
-            return parse_response(raw_response, self.allowed_actions)
-
-        return {"raw_response": raw_response}
-
-    # ============================================================
-    # INFERENCE BACKEND
-    # ============================================================
-
-    def _infer(self, prompt: str) -> str:
-        if self.backend == "ollama":
-            return self._infer_ollama(prompt)
-
-        raise ValueError(f"Unsupported backend: {self.backend}")
-
-    def _infer_ollama(self, prompt: str) -> str:
-        """
-        Calls local Ollama model.
-        """
-
-        result = subprocess.run(
-            [
-                "ollama",
-                "run",
-                self.model_name,
-            ],
-            input=prompt.encode(),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+        raw = self.runner.run_with_builder(
+            build_prompt, case_context, similar_cases, self.allowed_actions
         )
 
-        if result.returncode != 0:
-            raise RuntimeError(f"Ollama error: {result.stderr.decode()}")
+        if self.enforce_json:
+            return Utils.parse_response(raw, self.allowed_actions)
 
-        return result.stdout.decode()
+        return {"raw_response": raw}
+
+    def generate_plan(
+        self,
+        case_context: Dict,
+        decision: Dict,
+        allowed_plan_actions: List[str],
+    ) -> Dict:
+        """
+        Generate a step-by-step treatment plan for an approved decision.
+
+        Args:
+            case_context: The current crop case dict.
+            decision: The validated decision dict returned by generate_decision.
+            allowed_plan_actions: List of permitted plan step action strings.
+
+        Returns:
+            A dict with a 'plan' key containing an ordered list of step dicts.
+
+        Usage:
+            plan = engine.generate_plan(case_context, decision, plan_actions)
+        """
+        raw = self.runner.run_with_builder(
+            build_plan_prompt, case_context, decision, allowed_plan_actions
+        )
+        return Utils.parse_plan(raw, allowed_plan_actions)
