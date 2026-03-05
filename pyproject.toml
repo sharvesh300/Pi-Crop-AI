@@ -9,6 +9,7 @@ dependencies = [
     "opencv-python>=4.13.0.92",
     "rembg[cpu]>=2.0.72",
     "sentence-transformers>=5.2.3",
+    "tensorflow>=2.20.0",
 ]
 
 [dependency-groups]
