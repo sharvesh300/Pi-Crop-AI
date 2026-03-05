@@ -15,7 +15,7 @@ An offline-first, edge-deployed AI agent for crop disease diagnosis and treatmen
 7. [Memory System](#memory-system)
 8. [Prompts](#prompts)
 9. [Setup & Installation](#setup--installation)
-10. [Running the Agent](#running-the-agent)
+10. [Running the Agent](#running-the-agent) — [full pipeline](#full-pipeline--single-image) · [smoke test](#quick-smoke-test-3-mock-cases) · [LLM test](#quick-llm-test-single-case-no-full-pipeline)
 11. [Seeding Knowledge Memory](#seeding-knowledge-memory)
 12. [Testing](#testing)
 13. [Severity Estimation](#severity-estimation)
@@ -145,7 +145,7 @@ Each `plan` step has this shape:
 ```
 pi-crop-ai/
 │
-├── main.py                        # Entry point (currently minimal)
+├── main.py                        # Full perception-to-decision pipeline entry point
 ├── pyproject.toml                 # Project metadata and dependencies (uv / hatch)
 ├── README.md
 │
@@ -459,6 +459,78 @@ uv run scripts/ingest_knowledge.py
 ---
 
 ## Running the Agent
+
+### Full pipeline — single image
+
+Runs disease detection → severity estimation → LLM decision on one leaf image.
+
+```bash
+# Basic (crop name defaults to "Unknown")
+python main.py data/raw/bacterial_blight_103.jpg
+
+# With crop name for richer agent reasoning
+python main.py data/raw/bacterial_blight_103.jpg Soybean
+
+# Suppress TensorFlow / TFLite INFO noise
+python main.py data/raw/bacterial_blight_103.jpg Soybean 2>/dev/null
+
+# Or via uv (no manual venv activation needed)
+uv run main.py data/raw/bacterial_blight_103.jpg Soybean
+```
+
+**Prerequisites before running:**
+- Ollama must be running with `qwen2.5:1.5b` pulled:
+  ```bash
+  ollama serve
+  ollama pull qwen2.5:1.5b
+  ```
+- TFLite model must exist at the path in `config/model.yaml`
+  (default: `models/cnn/soybean_disease_mobilenetv3_opt.tflite`)
+
+**Sample output:**
+```
+[1/4] Image loaded : data/raw/bacterial_blight_103.jpg
+[2/4] Disease      : Bacterial Blight  (confidence: 90.49%)
+
+Disease Information — Bacterial Blight:
+  Pathogen  : Pseudomonas savastanoi pv. glycinea (bacterium)
+  Symptoms  : Water-soaked, angular spots bounded by leaf veins ...
+  ...
+
+[3/4] Severity     : 11.2%  (moderate → agent level: medium)
+[4/4] Running DecisionAgent ...
+
+============================================================
+  CROP     : Soybean
+  DISEASE  : Bacterial Blight  (confidence: 90.49%)
+  SEVERITY : 11.2%  (moderate)
+------------------------------------------------------------
+  DECISION : NO_TREATMENT
+  REASON   : ...
+  Treatment plan:
+    1. [MONITOR_WEEKLY] ...
+    2. [REMOVE_INFECTED_DEBRIS] ...
+============================================================
+```
+
+**Supported disease classes** (MobileNetV3Small, 8 classes):
+
+| Neuron | Class |
+|--------|-------|
+| 0 | Bacterial Blight |
+| 1 | Cercospora Leaf Blight |
+| 2 | Downy Mildew |
+| 3 | Frogeye Leaf Spot |
+| 4 | Healthy |
+| 5 | Potassium Deficiency |
+| 6 | Soybean Rust |
+| 7 | Target Spot |
+
+> **Preprocessing note:** `mobilenet_v3.preprocess_input` is baked into the
+> TFLite model's architecture. The pipeline feeds raw `float32 [0, 255]` pixels
+> — do **not** manually normalise before inference.
+
+---
 
 ### Quick smoke test (3 mock cases)
 

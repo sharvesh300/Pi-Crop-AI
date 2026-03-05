@@ -1,17 +1,74 @@
 """
 pi-crop-ai — main pipeline entry point.
 
-Pipeline:
-  1. Load image
-  2. TFLiteDiseaseDetector  → disease label + confidence
-  3. SeverityEstimator      → severity % + class
-  4. DecisionAgent.decide() → decision + reason + treatment plan
+Runs the full perception-to-decision pipeline on a single leaf image:
+  1. TFLiteDiseaseDetector  — MobileNetV3Small TFLite model classifies the
+                              disease from the image (8 soybean classes).
+  2. SeverityEstimator      — CV-based pipeline estimates what percentage of
+                              the leaf area is diseased and maps it to a
+                              severity class (mild / moderate / severe / critical).
+  3. DecisionAgent          — LLM-backed agent (Ollama / qwen2.5) receives the
+                              disease, severity and crop context, then produces
+                              a decision, reason and step-by-step treatment plan.
 
-Usage:
+Usage
+-----
   python main.py <image_path> [crop_name]
 
-  image_path  Path to the leaf image (required)
-  crop_name   Optional crop name passed to the agent (default: "Unknown")
+Arguments
+---------
+  image_path   Path to the leaf image file (JPG / PNG).  Can be an absolute
+               path or a path relative to the project root.
+               Example:  data/raw/bacterial_blight_103.jpg
+
+  crop_name    (optional) Name of the crop, passed to the agent as context.
+               Defaults to "Unknown" when omitted.
+               Example:  Soybean
+
+Examples
+--------
+  # Detect disease in a specific image, no crop name
+  python main.py data/raw/bacterial_blight_103.jpg
+
+  # Supply the crop name for richer agent reasoning
+  python main.py data/raw/soybean_rust_10.JPG Soybean
+
+  # Suppress TensorFlow / TFLite INFO noise
+  python main.py data/raw/bacterial_blight_103.jpg Soybean 2>/dev/null
+
+Output
+------
+  The pipeline prints four progress lines followed by a disease information
+  block, then a final result panel:
+
+    [1/4] Image loaded  : <path>
+    [2/4] Disease       : <class>  (confidence: XX.XX%)
+    Disease Information — <class>:
+      Pathogen / Symptoms / Spread / Urgency / Mgmt Notes
+    [3/4] Severity      : XX.X%  (<mild|moderate|severe|critical> → agent level: <low|medium|high>)
+    [4/4] Running DecisionAgent ...
+    ============================================================
+      CROP     : <crop_name>
+      DISEASE  : <class>  (confidence: XX.XX%)
+      SEVERITY : XX.X%  (<severity class>)
+    ------------------------------------------------------------
+      DECISION : <NO_TREATMENT|MONITOR|MEDICINAL_TREATMENT|...>
+      REASON   : <free-text explanation>
+      SAFE     : <True|False|None>
+      Treatment plan:
+        1. [ACTION] details ...
+        2. [ACTION] details ...
+
+Prerequisites
+-------------
+  * Ollama running locally with qwen2.5:1.5b pulled:
+        ollama serve
+        ollama pull qwen2.5:1.5b
+  * Python environment activated and dependencies installed:
+        uv sync
+        source .venv/bin/activate    # or:  uv run python main.py ...
+  * TFLite model present at the path configured in config/model.yaml
+        (default: models/cnn/soybean_disease_mobilenetv3_opt.tflite)
 """
 
 import sys
