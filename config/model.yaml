@@ -1,9 +1,9 @@
 cnn:
-  model_path: models/cnn/mobilenet_v3.tflite
-  input_size: 160
-  num_classes: 5
+  model_path: models/cnn/soybean_disease_mobilenetv3_opt.tflite
+  input_size: 224
+  num_classes: 8
   confidence_threshold: 0.75
-  quantized: true
+  quantized: false
 
 llm:
   backend: ollama        # ollama | llama_cpp
