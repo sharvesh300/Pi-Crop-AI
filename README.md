@@ -18,9 +18,10 @@ An offline-first, edge-deployed AI agent for crop disease diagnosis and treatmen
 10. [Running the Agent](#running-the-agent)
 11. [Seeding Knowledge Memory](#seeding-knowledge-memory)
 12. [Testing](#testing)
-13. [Training the CNN](#training-the-cnn)
-14. [Deployment on Raspberry Pi](#deployment-on-raspberry-pi)
-15. [What Is Not Yet Implemented](#what-is-not-yet-implemented)
+13. [Severity Estimation](#severity-estimation)
+14. [Training the CNN](#training-the-cnn)
+15. [Deployment on Raspberry Pi](#deployment-on-raspberry-pi)
+16. [What Is Not Yet Implemented](#what-is-not-yet-implemented)
 
 ---
 
@@ -219,7 +220,9 @@ pi-crop-ai/
 │   ├── reset_memory.py            # (placeholder) Wipes and resets memory stores
 │   ├── run_agent.py               # (placeholder) Full pipeline runner
 │   ├── test_agent.py              # Smoke test: runs 3 mock cases through the full pipeline
-│   └── test_llm.py                # Quick test: LLM decision for a single mock case
+│   ├── test_llm.py                # Quick test: LLM decision for a single mock case
+│   ├── test_severity_estimator.py # Batch/single-image severity test against data/raw/
+│   └── close_cv_windows.py        # Utility: closes all open OpenCV windows
 │
 ├── sync/
 │   ├── remote_client.py           # (placeholder) HTTP client for cloud sync
@@ -520,6 +523,128 @@ The test suite covers:
 
 ---
 
+## Severity Estimation
+
+`crop_agent/perception/severity_estimator.py` is **fully implemented**. It estimates the percentage of a leaf affected by disease using computer vision — no model weights required.
+
+### How it works
+
+| Stage | Method | Detail |
+|---|---|---|
+| Background removal | `rembg` (U²-Net) | Strips background, produces a binary leaf mask |
+| Disease detection | Excess Green Index (ExG) | `ExG = 2G − R − B`; low-ExG pixels → diseased |
+| Clustering | 9×9 morphological dilation + close | Merges nearby lesion pixels into real clusters |
+| Contour filtering | `cv2.findContours` | Drops clusters < 250 px² (noise) |
+| Severity score | `lesion_area / leaf_area × 100` | Percentage of leaf surface affected |
+| Classification | Threshold-based | `< 5%` mild · `< 20%` moderate · `< 50%` severe · `≥ 50%` critical |
+
+### Where to place images
+
+Place leaf images directly in:
+```
+data/raw/
+```
+
+Any standard image format is accepted: `.jpg`, `.jpeg`, `.png`, `.bmp`, `.tiff`, `.webp`.
+
+Subdirectories are **not** scanned — all images must be flat in `data/raw/`.
+
+**Example layout:**
+```
+data/
+└── raw/
+    ├── bacterial_blight_01.jpg
+    ├── bacterial_blight_02.jpg
+    └── healthy_leaf_01.jpg
+```
+
+### Running the test script
+
+#### Batch mode — process all images in `data/raw/`
+
+```bash
+python scripts/test_severity_estimator.py
+```
+
+Output:
+- Progress line per image with severity % and class
+- Results table (image name · severity % · class · status)
+- Summary statistics (mean / min / max / std, class distribution histogram)
+- 4-panel canvas saved to `data/processed/severity_<filename>` for every image
+
+#### Single-image mode — live display
+
+```bash
+# by filename (resolved from data/raw/ automatically)
+python scripts/test_severity_estimator.py bacterial_blight_01.jpg
+
+# or by absolute / relative path
+python scripts/test_severity_estimator.py /path/to/leaf.jpg
+```
+
+Output:
+- Severity % and class printed to stdout
+- An interactive window opens showing the 4-panel analysis canvas (see below)
+- Press **any key** in the window to close it
+- Canvas also saved to `data/processed/severity_<filename>`
+
+#### Closing stuck OpenCV windows
+
+If a window does not close (e.g. after a background run), use:
+```bash
+python scripts/close_cv_windows.py
+```
+
+### Output canvas layout
+
+Each saved / displayed canvas is a **1×4 horizontal strip** at 400×400 px per panel:
+
+| Panel | Content |
+|---|---|
+| 1 — Original | Raw input image |
+| 2 — Leaf (bg removed) | Leaf isolated by rembg |
+| 3 — ExG disease map | Excess Green heatmap (colour-mapped; dark areas = low ExG = diseased) |
+| 4 — Disease spots highlighted | Red bounding boxes drawn around each detected lesion cluster |
+
+Saved files:
+```
+data/processed/
+└── severity_<original_filename>.jpg
+```
+
+### Programmatic usage
+
+```python
+from crop_agent.perception.severity_estimator import SeverityEstimator
+
+estimator = SeverityEstimator()
+
+# Run pipeline and display window
+result = estimator.estimate("data/raw/bacterial_blight_01.jpg", visualize=True)
+
+# Run pipeline silently
+result = estimator.estimate("data/raw/bacterial_blight_01.jpg", visualize=False)
+
+print(result["severity_percent"])  # e.g. 28.6
+print(result["severity_class"])    # e.g. "severe"
+```
+
+You can also call each pipeline stage individually:
+
+```python
+import cv2
+
+img = cv2.imread("data/raw/bacterial_blight_01.jpg")
+
+leaf, leaf_mask   = estimator.remove_background(img)
+disease_mask      = estimator.detect_disease(leaf, leaf_mask)
+severity_percent  = estimator.compute_severity(leaf_mask, disease_mask)
+severity_class    = estimator.classify_severity(severity_percent)
+highlighted       = estimator.highlight_disease(leaf, disease_mask)
+```
+
+---
+
 ## Training the CNN
 
 > **Status:** Training scripts are scaffolded but not yet implemented. See `training/`.
@@ -582,7 +707,7 @@ The following modules are **scaffolded** (files exist, logic is pending):
 |---|---|---|
 | Camera capture | `crop_agent/perception/camera.py` | Pi Camera / USB capture |
 | Disease detection | `crop_agent/perception/disease_detector.py` | TFLite CNN inference |
-| Severity estimation | `crop_agent/perception/severity_estimator.py` | Post-processing CNN output |
+| ~~Severity estimation~~ | ~~`crop_agent/perception/severity_estimator.py`~~ | ✅ Implemented — see [Severity Estimation](#severity-estimation) |
 | DHT22 sensor | `crop_agent/sensors/dht_sensor.py` | Temperature & humidity read |
 | Soil sensor | `crop_agent/sensors/soil_sensor.py` | Soil moisture read |
 | Sensor fusion | `crop_agent/sensors/sensor_fusion.py` | Merges all sensor readings |
