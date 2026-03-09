@@ -3,13 +3,15 @@ name = "pi-crop-ai"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 dependencies = [
+    "numpy<2",
     "faiss-cpu>=1.13.2",
-    "opencv-python>=4.13.0.92",
-    "rembg[cpu]>=2.0.72",
+    "opencv-python<4.13",
+    "rembg[cpu]<2.0.72",
     "sentence-transformers>=5.2.3",
-    "tensorflow>=2.20.0",
+    "tensorflow==2.15",
+    "tflite-runtime>=2.14.0",
 ]
 
 [dependency-groups]

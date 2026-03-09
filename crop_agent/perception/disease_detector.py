@@ -1,15 +1,22 @@
 import numpy as np
 import cv2
-import tensorflow as tf
+import platform
+
+if platform.machine() in ["armv7l","aarch64"]:
+    from tflite_runtime.interpreter import Interpreter
+    BACKEND="tflite"
+else:
+    from tensorflow.lite import Interpreter
+    BACKEND="tensorflow"
+
 
 
 class TFLiteDiseaseDetector:
     def __init__(self, model_path, class_names):
         self.class_names = class_names
-
-        self.interpreter = tf.lite.Interpreter(model_path=model_path)
+       
+        self.interpreter = Interpreter(model_path=model_path)
         self.interpreter.allocate_tensors()
-
         self.input_details = self.interpreter.get_input_details()
         self.output_details = self.interpreter.get_output_details()
 
