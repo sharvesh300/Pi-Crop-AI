@@ -1,4 +1,4 @@
-from typing import List, Dict
+from typing import Generator, List, Dict, Union
 
 from crop_agent.utils import Utils, load_yaml, MODEL_CONFIG, AGENT_CONFIG
 from crop_agent.llm.model_backends import get_backend
@@ -95,3 +95,54 @@ class LLMEngine:
             build_plan_prompt, case_context, decision, allowed_plan_actions
         )
         return Utils.parse_plan(raw, allowed_plan_actions)
+
+    def stream_decision(
+        self,
+        case_context: Dict,
+        similar_cases: List[str],
+    ) -> Generator[Union[str, Dict], None, None]:
+        """
+        Stream decision tokens one-by-one, then yield the final parsed dict.
+
+        Yields str tokens while the model is generating, then yields one Dict
+        as the final item containing the fully parsed decision.
+
+        Usage:
+            for item in engine.stream_decision(case_context, similar_cases):
+                if isinstance(item, str):
+                    print(item, end="")  # live token
+                else:
+                    decision = item      # final result
+        """
+        prompt = build_prompt(case_context, similar_cases, self.allowed_actions)
+        full_text = ""
+        for token in self.runner.backend.stream(prompt):
+            full_text += token
+            yield token
+        yield Utils.parse_response(full_text, self.allowed_actions)
+
+    def stream_plan(
+        self,
+        case_context: Dict,
+        decision: Dict,
+        allowed_plan_actions: List[str],
+    ) -> Generator[Union[str, Dict], None, None]:
+        """
+        Stream plan tokens one-by-one, then yield the final parsed plan dict.
+
+        Yields str tokens while the model is generating, then yields one Dict
+        as the final item containing the parsed plan list.
+
+        Usage:
+            for item in engine.stream_plan(case_context, decision, plan_actions):
+                if isinstance(item, str):
+                    print(item, end="")  # live token
+                else:
+                    plan = item          # final result
+        """
+        prompt = build_plan_prompt(case_context, decision, allowed_plan_actions)
+        full_text = ""
+        for token in self.runner.backend.stream(prompt):
+            full_text += token
+            yield token
+        yield Utils.parse_plan(full_text, allowed_plan_actions)

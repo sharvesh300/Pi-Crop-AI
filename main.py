@@ -11,6 +11,7 @@ Pipeline
 
 import sys
 from pathlib import Path
+import json as _json
 import cv2
 import time
 
@@ -165,6 +166,102 @@ def run_pipeline(image_path: str, crop: str = "Unknown") -> dict:
     result["_severity_class"] = severity_class
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# Streaming Pipeline  (SSE)
+# ---------------------------------------------------------------------------
+
+def stream_pipeline(image_path: str, crop: str = "Unknown"):
+    """
+    Generator that runs the full pipeline and yields SSE-formatted strings.
+
+    Phase 1 — Disease detection + severity (fast, no LLM).
+    Phase 2 — LLM decision with live token streaming.
+    Phase 3 — LLM treatment plan with live token streaming.
+
+    Each yielded string is an SSE event line ready for StreamingResponse:
+        data: {"type": ..., ...}\n\n
+    Event types emitted:
+        phase          — progress message
+        detection      — CNN + severity results
+        token          — single LLM token {"phase": "decision"|"plan", "text": "..."}
+        decision_result — final parsed decision dict
+        plan_result    — final parsed plan list
+        done           — pipeline finished
+        error          — error message
+    """
+
+    def _sse(data: dict) -> str:
+        return f"data: {_json.dumps(data)}\n\n"
+
+    try:
+        # ── Phase 1: Detection (fast) ──────────────────────────────────────
+        yield _sse({"type": "phase", "message": "🔬 Running disease detection..."})
+
+        img = cv2.imread(image_path)
+        if img is None:
+            yield _sse({"type": "error", "message": f"Cannot read image: {image_path}"})
+            return
+
+        detector = TFLiteDiseaseDetector(
+            model_path=str(MODEL_PATH), class_names=CLASS_NAMES
+        )
+        detection = detector.predict(img)
+        disease = detection["disease"]
+        confidence = detection["confidence"]
+
+        estimator = SeverityEstimator()
+        severity_result = estimator.estimate(image_path, visualize=False)
+        severity_percent = severity_result["severity_percent"]
+        severity_class = severity_result["severity_class"]
+        agent_severity = _SEVERITY_MAP[severity_class]
+
+        yield _sse({
+            "type": "detection",
+            "_crop": crop,
+            "disease": disease,
+            "confidence": confidence,
+            "severity_percent": severity_percent,
+            "severity_class": severity_class,
+        })
+
+        case_context = {
+            "crop": crop,
+            "disease": disease,
+            "severity": agent_severity,
+            "confidence": confidence,
+        }
+
+        # ── Phase 2: LLM Decision (streamed) ──────────────────────────────
+        yield _sse({"type": "phase", "message": "🤖 Generating treatment decision..."})
+
+        agent = DecisionAgent()
+        similar_cases = agent._retrieve_memory(case_context)
+        decision = None
+
+        for item in agent.llm_engine.stream_decision(case_context, similar_cases):
+            if isinstance(item, str):
+                yield _sse({"type": "token", "phase": "decision", "text": item})
+            else:
+                decision = item
+                yield _sse({"type": "decision_result", **item})
+
+        # ── Phase 3: LLM Plan (streamed) ──────────────────────────────────
+        yield _sse({"type": "phase", "message": "💊 Generating treatment plan..."})
+
+        allowed_plan_actions = agent.planner.allowed_plan_actions
+
+        for item in agent.llm_engine.stream_plan(case_context, decision, allowed_plan_actions):
+            if isinstance(item, str):
+                yield _sse({"type": "token", "phase": "plan", "text": item})
+            else:
+                yield _sse({"type": "plan_result", "plan": item.get("plan", [])})
+
+        yield _sse({"type": "done"})
+
+    except Exception as exc:
+        yield _sse({"type": "error", "message": str(exc)})
 
 
 # ---------------------------------------------------------------------------
