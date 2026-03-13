@@ -101,6 +101,12 @@ def run_single(image_path: Path, estimator: SeverityEstimator):
     cv2.imwrite(str(out_path), canvas)
     print(f"Saved    : {out_path}")
 
+    # --- show extracted leaf on its own window ---
+    img = cv2.imread(str(image_path))
+    leaf, _ = estimator.remove_background(img)
+    leaf_resized = cv2.resize(leaf, PANEL_SIZE)
+    cv2.imshow(f"Leaf Extracted — {image_path.name}", leaf_resized)
+
     title = f"Severity Analysis — {image_path.name}"
     cv2.imshow(title, canvas)
     print("\n[Press any key in the image window to close]\n")
